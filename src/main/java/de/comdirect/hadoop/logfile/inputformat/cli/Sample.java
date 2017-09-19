@@ -87,9 +87,12 @@ public class Sample {
         SparkConf sparkConfig = new SparkConf().setAppName(String.format("Reading sample (fraction %f) from '%s'", sampleFraction, inputPath));
         JavaSparkContext sparkContext = new JavaSparkContext(sparkConfig);
 
-        hadoopConfig.set(LogfileInputFormat.KEY_FIRSTLINE_PATTERN, pattern.pattern());
+        LogfileInputFormat.setPattern(hadoopConfig, pattern);
 
-        JavaPairRDD<Tuple2<Path, Long>, Text> rdd = sparkContext.newAPIHadoopFile(inputPath.toString(), LogfileInputFormat.class, LogfileInputFormat.KEY_CLASS,
+        JavaPairRDD<Tuple2<Path, Long>, Text> rdd = sparkContext.newAPIHadoopFile(
+                inputPath.toString(),
+                LogfileInputFormat.class,
+                LogfileInputFormat.KEY_CLASS,
                 Text.class,
                 hadoopConfig);
 

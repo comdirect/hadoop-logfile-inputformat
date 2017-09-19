@@ -46,6 +46,9 @@ public class LogfileInputFormat extends FileInputFormat<Tuple2<Path, Long>, Text
 
     private Logger LOG = LogManager.getLogger(LogfileInputFormat.class);
 
+    private static final String FIRSTLINE_PATTERN_DEFAULT = "de.comdirect.hadoop.logfile.inputformat.PatternResolver_FIRSTLINE_PATTERN_DEFAULT";
+    private static final String FIRSTLINE_PATTERN_HDFS_PATH = "de.comdirect.hadoop.logfile.inputformat.PatternResolver_FIRSTLINE_PATTERN_HDFS_PATH_%s";
+
     /**
      * Defines a type class for the key of the produced pairs.
      */
@@ -53,12 +56,48 @@ public class LogfileInputFormat extends FileInputFormat<Tuple2<Path, Long>, Text
     public static Class<Tuple2<Path, Long>> KEY_CLASS = (Class<Tuple2<Path, Long>>) ((Class<?>) Tuple2.class);
 
     /**
-     * Key under which the regex for the first line of a log record has to be stored in the Hadoop configuration.
+     * Sets the general pattern to recognize the first line of a log record.
      * 
-     * @see {@link Configuration}
-     * @see {@link Configuration#set(String, String)}
+     * This pattern is used if no special pattern is defined on a per-file basis (see
+     * {@link #setPattern(Configuration, Path, Pattern)}.
+     * 
+     * @param hadoopConfig
+     *            Hadoop configuration into which the pattern should be set.
+     * @param pattern
+     *            pattern to recognize the first line of a log record
      */
-    public static final String KEY_FIRSTLINE_PATTERN = "de.comdirect.hadoop.logfile.inputformat.firstline_pattern";
+    public static void setPattern(Configuration hadoopConfig, Pattern pattern) {
+
+        hadoopConfig.setPattern(FIRSTLINE_PATTERN_DEFAULT, pattern);
+    }
+
+    /**
+     * Sets the pattern to recognize the first line of a log record on a per file basis.
+     * 
+     * @param hadoopConfig
+     *            Hadoop configuration into which the pattern should be set.
+     * @param path
+     *            HDFS path for which this pattern should be used
+     * @param pattern
+     *            pattern to recognize the first line of a log record
+     */
+    public static void setPattern(Configuration hadoopConfig, String path, Pattern pattern) {
+
+        hadoopConfig.setPattern(String.format(FIRSTLINE_PATTERN_HDFS_PATH, path), pattern);
+    }
+
+    /**
+     * Determines the pattern that should be used for the given HDFS file.
+     * 
+     * @param hadoopConfig
+     *            Hadoop configuration from which the pattern should be retrieved.
+     * @param path
+     *            HDFS file
+     */
+    static Pattern getPattern(Configuration hadoopConfig, String path) {
+
+        return hadoopConfig.getPattern(String.format(FIRSTLINE_PATTERN_HDFS_PATH, path), hadoopConfig.getPattern(FIRSTLINE_PATTERN_DEFAULT, null));
+    }
 
     @Override
     public RecordReader<Tuple2<Path, Long>, Text> createRecordReader(InputSplit split, TaskAttemptContext context) {

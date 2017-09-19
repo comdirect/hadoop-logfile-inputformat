@@ -8,9 +8,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.zip.GZIPOutputStream;
 
 import org.apache.commons.cli.BasicParser;
@@ -30,11 +30,13 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 
 import de.comdirect.hadoop.logfile.inputformat.LogfileInputFormat;
 import de.comdirect.hadoop.logfile.inputformat.test.LogLevel;
 import de.comdirect.hadoop.logfile.inputformat.test.LogfileGenerator;
 import de.comdirect.hadoop.logfile.inputformat.test.LogfileSummary;
+import de.comdirect.hadoop.logfile.inputformat.test.LogfileType;
 import scala.Tuple2;
 
 /**
@@ -47,14 +49,6 @@ import scala.Tuple2;
  * @since 2017
  */
 public class Test {
-
-    private static final String REGEX = "^([0-9]{4}-[0-9]{2}-[0-9]{2}\\s[0-2][0-9]:[0-5][0-9]:[0-5][0-9],[0-9]{3})\\s\\|\\s(INFO|WARN|ERROR)\\s\\|\\s.*";
-
-    private static final Pattern FIRSTLINE_PATTERN = Pattern.compile(REGEX);
-
-    private static final Pattern MATCHER_PATTERN = Pattern.compile(REGEX, Pattern.DOTALL);
-
-    private static DateTimeFormatter timestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS");
 
     private static Options OPTIONS = new Options();
 
@@ -81,13 +75,13 @@ public class Test {
 
     public static void main(String[] args) throws IOException {
 
+        final Configuration hadoopConfig = new Configuration(true);
+        hdfs = FileSystem.get(hadoopConfig);
+
         if (!parseArguments(args)) {
             printHelp();
             System.exit(1);
         }
-
-        final Configuration hadoopConfig = new Configuration(true);
-        hdfs = FileSystem.get(hadoopConfig);
 
         if (hdfs.exists(directory)) {
             if (!hdfs.isDirectory(directory)) {
@@ -105,19 +99,26 @@ public class Test {
 
         System.out.printf("Creating test data in '%s'. This may take a while...%n", directory.toString());
 
-        LogfileSummary summary = writeLogFiles();
+        Map<String, LogfileType> logfileTypeByPath = new HashMap<>();
+
+        LogfileSummary summary = writeLogFiles(logfileTypeByPath);
 
         SparkConf sparkConfig = new SparkConf().setAppName("Testing LogfileInputFormat.");
         JavaSparkContext sparkContext = new JavaSparkContext(sparkConfig);
 
-        hadoopConfig.set(LogfileInputFormat.KEY_FIRSTLINE_PATTERN, FIRSTLINE_PATTERN.pattern());
+        logfileTypeByPath.forEach((path, type) -> {
+            LogfileInputFormat.setPattern(hadoopConfig, path, type.getFirstlinePattern());
+        });
+        LogfileInputFormat.setPattern(hadoopConfig, LogfileType.A.getFirstlinePattern());
 
         JavaPairRDD<Tuple2<Path, Long>, Text> rdd;
         JavaRDD<Tuple2<LocalDateTime, LogLevel>> logRecords;
 
         rdd = sparkContext.newAPIHadoopFile(logDir + "/*" + FILE_EXT_LOG, LogfileInputFormat.class, LogfileInputFormat.KEY_CLASS, Text.class, hadoopConfig);
 
-        logRecords = rdd.map(Test::parse).cache();
+        Function<Tuple2<Tuple2<Path, Long>, Text>, Tuple2<LocalDateTime, LogLevel>> mappingFunction = mappingFunction(logfileTypeByPath);
+
+        logRecords = rdd.map(mappingFunction).cache();
         long totalCountLog = logRecords.count();
         long infoCountLog = logRecords.filter(tuple -> tuple._2 == LogLevel.INFO).count();
         long warnCountLog = logRecords.filter(tuple -> tuple._2 == LogLevel.WARN).count();
@@ -125,7 +126,7 @@ public class Test {
 
         rdd = sparkContext.newAPIHadoopFile(logDirGz + "/*" + FILE_EXT_GZ, LogfileInputFormat.class, LogfileInputFormat.KEY_CLASS, Text.class, hadoopConfig);
 
-        logRecords = rdd.map(Test::parse).cache();
+        logRecords = rdd.map(mappingFunction).cache();
         long totalCountGz = logRecords.count();
         long infoCountGz = logRecords.filter(tuple -> tuple._2 == LogLevel.INFO).count();
         long warnCountGz = logRecords.filter(tuple -> tuple._2 == LogLevel.WARN).count();
@@ -149,6 +150,8 @@ public class Test {
         System.out.printf("%30s %15d %15d %15d %15s%n%n%n", "# of ERROR level records",
                 errorCountExpected, errorCountLog, errorCountGz,
                 ((errorCountExpected == errorCountLog && errorCountLog == errorCountGz) ? "SUCCESS" : "FAILURE"));
+
+        sparkContext.close();
     }
 
     private static void createDirectories() throws IOException {
@@ -161,7 +164,7 @@ public class Test {
         hdfs.mkdirs(logDirGz);
     }
 
-    private static LogfileSummary writeLogFiles() throws IOException {
+    private static LogfileSummary writeLogFiles(Map<String, LogfileType> logfileTypeByPath) throws IOException {
 
         LogfileSummary summary = new LogfileSummary();
 
@@ -174,13 +177,19 @@ public class Test {
         LocalDate day = previousMonth.atDay(1);
 
         while (day.isBefore(previousMonth.atDay(11))) {
-            out = hdfs.create(new Path(logDir, getFilename(day, FILE_EXT_LOG)));
-            outGz = new DataOutputStream(new GZIPOutputStream(hdfs.create(new Path(logDirGz, getFilename(day, FILE_EXT_GZ))), true));
-            summary = summary.merge(LogfileGenerator.generateLogRecords(day.atStartOfDay(), day.plusDays(1).atStartOfDay(), writeAsUtf8To(out, outGz)));
+            LogfileType logfileType = LogfileType.random();
+            Path pathLogfile = new Path(logDir, getFilename(day, FILE_EXT_LOG));
+            out = hdfs.create(pathLogfile);
+            Path pathLogfileGz = new Path(logDirGz, getFilename(day, FILE_EXT_GZ));
+            outGz = new DataOutputStream(new GZIPOutputStream(hdfs.create(pathLogfileGz), true));
+            summary = summary
+                    .merge(LogfileGenerator.generateLogRecords(logfileType, day.atStartOfDay(), day.plusDays(1).atStartOfDay(), writeAsUtf8To(out, outGz)));
             out.flush();
             out.close();
             outGz.flush();
             outGz.close();
+            logfileTypeByPath.put(pathLogfile.toString(), logfileType);
+            logfileTypeByPath.put(pathLogfileGz.toString(), logfileType);
             day = day.plusDays(1);
         }
 
@@ -199,10 +208,10 @@ public class Test {
         };
     }
 
-    private static Tuple2<LocalDateTime, LogLevel> parse(Tuple2<Tuple2<Path, Long>, Text> tuple) {
-        Matcher matcher = MATCHER_PATTERN.matcher(tuple._2.toString());
-        matcher.matches();
-        return new Tuple2<>(LocalDateTime.parse(matcher.group(1), timestampFormatter), LogLevel.valueOf(matcher.group(2)));
+    private static Function<Tuple2<Tuple2<Path, Long>, Text>, Tuple2<LocalDateTime, LogLevel>> mappingFunction(final Map<String, LogfileType> pathTypeMapping) {
+        return tuple -> {
+            return pathTypeMapping.get(tuple._1._1.toString()).parse(tuple._2.toString());
+        };
     }
 
     private static String getFilename(LocalDate day, String extension) {
@@ -219,7 +228,7 @@ public class Test {
         CommandLineParser parser = new BasicParser();
         try {
             CommandLine commandLine = parser.parse(OPTIONS, args);
-            directory = new Path(commandLine.getOptionValue(DIRECTORY.getOpt()));
+            directory = new Path(hdfs.getHomeDirectory(), commandLine.getOptionValue(DIRECTORY.getOpt()));
             return true;
         } catch (ParseException | IllegalArgumentException e) {
             return false;
