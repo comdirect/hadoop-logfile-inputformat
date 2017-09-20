@@ -2,8 +2,6 @@ package de.comdirect.hadoop.logfile.inputformat;
 
 import java.io.IOException;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -20,7 +18,6 @@ import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 import org.apache.hadoop.util.LineReader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
 import scala.Tuple2;
 
 /**
@@ -144,17 +141,16 @@ public class LogfileRecordReader extends RecordReader<Tuple2<Path, Long>, Text> 
 
         Configuration jobConfiguration = context.getConfiguration();
 
-        try {
-            firstlinePattern = Pattern.compile(jobConfiguration.get(LogfileInputFormat.KEY_FIRSTLINE_PATTERN));
-        } catch (NullPointerException | PatternSyntaxException e) {
-            String message = String.format("The regex to detect the first line of a log record must be supplied under key '%s'.",
-                    LogfileInputFormat.KEY_FIRSTLINE_PATTERN);
-            LOG.error(message, e);
-            throw new IOException(message, e);
-        }
-
         final FileSplit fileSplit = (FileSplit) split;
         hdfsPath = fileSplit.getPath();
+
+        firstlinePattern = LogfileInputFormat.getPattern(jobConfiguration, hdfsPath.toString());
+
+        if (firstlinePattern == null) {
+            String message = String.format("No pattern could be determined for HDFS path '%s'", hdfsPath);
+            LOG.error(message);
+            throw new IOException(message);
+        }
 
         start = fileSplit.getStart();
         end = start + fileSplit.getLength();

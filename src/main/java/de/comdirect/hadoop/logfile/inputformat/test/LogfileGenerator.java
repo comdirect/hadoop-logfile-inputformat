@@ -23,21 +23,33 @@ public class LogfileGenerator {
 
     static String nullPointerExceptionStackTrace = stackTrace();
 
-    public static LogfileSummary generateLogRecords(LocalDateTime start, LocalDateTime end, Consumer<String> consumer) {
+    public static LogfileSummary generateLogRecords(LogfileType type, LocalDateTime start, LocalDateTime end, Consumer<String> consumer) {
         LogfileSummary summary = new LogfileSummary();
         LocalDateTime next = start;
         while (next.isBefore(end)) {
-            consumer.accept(createLogEntry(next, summary));
+            consumer.accept(createLogEntry(type, next, summary));
             next = next.plusNanos(5000000L);
         }
         return summary;
     }
 
-    static String createLogEntry(LocalDateTime timestamp, LogfileSummary summary) {
+    static String createLogEntry(LogfileType type, LocalDateTime timestamp, LogfileSummary summary) {
         LogLevel level = LogLevel.random();
         String text = randomText(level);
         summary.addRecord(level);
-        return String.format("%s | %s | %s | %s%n", timestamp.format(timestampFormatter), level, randomLoggingClass(), text);
+        String entry = null;
+        switch (type) {
+        case A:
+            entry = String.format("%s | %s | %s | %s%n", timestamp.format(timestampFormatter), level, randomLoggingClass(), text);
+            break;
+
+        case B:
+            entry = String.format("%s | %s | %s | %s%n", level, timestamp.format(timestampFormatter), randomLoggingClass(), text);
+            break;
+
+        default:
+        }
+        return entry;
     }
 
     static String randomText(LogLevel level) {
