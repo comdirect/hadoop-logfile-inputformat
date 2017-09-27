@@ -15,7 +15,7 @@ This library was developed in the context of an Apache Spark program written in 
 ### Logfiles with multi-line log records
 If you have logfiles where single log records may consist of multiple lines, the built-in input formats of Hadoop cannot help you to process these files as they read line by line. Due to parallelization you will most probably not end up with complete log records. What you need is this:
 
-![the process](https://raw.githubusercontent.com/comdirect/hadoop-logfile-inputformat/documentation/img/LogfileInputFormat_Process.png)
+![the process](https://raw.githubusercontent.com/comdirect/hadoop-logfile-inputformat/master/img/LogfileInputFormat_Process.png)
 
 ## Usage
 The input format must be provided with a regex to match the first line of each record. It can be applied on an HDFS path that may refer to multiple files.
@@ -26,7 +26,7 @@ The data it produces (as a RDD for example) consists of pairs that contain:
 
 The following image shows in- and output:
 
-![the data](https://raw.githubusercontent.com/comdirect/hadoop-logfile-inputformat/documentation/img/LogfileInputFormat_Data.png)
+![the data](https://raw.githubusercontent.com/comdirect/hadoop-logfile-inputformat/master/img/LogfileInputFormat_Data.png)
 
 ### Code 
 
