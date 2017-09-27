@@ -27,8 +27,9 @@ import scala.Tuple2;
  * 
  * The <b>value</b> is a {@link Text} containing the actual log record which can consist of multiple lines.
  * 
- * To determine the first line of a log record, a regex ({@link Pattern}) must be provided under the key
- * {@link #KEY_FIRSTLINE_PATTERN} of the Hadoop {@link Configuration}.
+ * To determine the first line of a log record, a regex ({@link Pattern}) must be provided via the Hadoop
+ * {@link Configuration}. The methods {@link #setPattern(Configuration, Pattern)} and
+ * {@link #setPattern(Configuration, String, Pattern)} do this for you.
  * 
  * To use this input format in Apache Spark, please use
  * {@link JavaSparkContext#newAPIHadoopFile(String, Class, Class, Class, Configuration)}. In addition to path (1st

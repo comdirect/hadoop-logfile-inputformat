@@ -107,8 +107,9 @@ public class LogfileRecordReader extends RecordReader<Tuple2<Path, Long>, Text> 
     /**
      * Pattern to detect first line of a log record.
      * 
-     * Must be provided as a regex String in Hadoop {@link Configuration} under the key
-     * {@link LogfileInputFormat#KEY_FIRSTLINE_PATTERN}.
+     * The pattern must be provided by the user via the Hadoop {@link Configuration}.
+     * 
+     * The method {@link LogfileInputFormat#getPattern(Configuration, String)} helps receiving the correct pattern.
      */
     private Pattern firstlinePattern;
 
