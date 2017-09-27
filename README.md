@@ -67,3 +67,34 @@ JavaPairRDD<Tuple2<Path, Long>, Text> rdd = sparkContext.newAPIHadoopFile(
 ```
 
 ## Sample program
+The sample program `de.comdirect.hadoop.logfile.inputformat.cli.Sample` is an Apache Spark driver that can be used in your Hadoop cluster. It acts as an example you can study to understand the usage of the input format.
+
+This driver program uses the input format to draw a sample and save it in a new file in HDFS
+
+The program describes its params itself:
+
+```
+usage: de.comdirect.hadoop.logfile.inputformat.cli.Sample
+ -i,--inputPath <arg>        HDFS input path(s)
+ -o,--outputPath <arg>       HDFS output path(s)
+ -p,--pattern <arg>          regex pattern that defines the first line of a log record
+ -s,--sampleFraction <arg>   expected size of the sample as a fraction of total # of records (defaults to 0.01 = 1 percent) [0.0 .. 1.0]
+ ```
+ 
+## Test program
+As the author is not capable of (or too lazy) writing JUnit tests which start Hadoop clusters instantly, the lib comes with a test program that can be run on a Hadoop cluster after the packaging.
+
+```
+usage: de.comdirect.hadoop.logfile.inputformat.cli.Test
+ -d,--directory <arg>   HDFS directory where the temporary files are stored. Directory has to be empty respectively gets created by this test.
+```
+
+The program does the following
+
+1. Creates 10 logfiles containing a total of 172,800,000 log entries of different levels (INFO, WARN, ERROR)
+1. Creates logfiles with exactly the same entries as \*.gz files.
+1. Reads the raw logfiles with the LogfileInputFormat and counts total number and numbers grouped by log level
+1. Reads the gzipped logfiles with the LogfileInputFormat and counts total number and numbers grouped by log level
+1. Compares expected values with each of the reads and prints out summary.
+
+**Warning!** The Spark driver uses about 20G (piece of cake for a real cluster, but mayby annoyingly large for dev environment) net HDFS space and may take a while to complete.
