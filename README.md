@@ -28,3 +28,42 @@ The following image shows in- and output:
 
 ![the data](https://raw.githubusercontent.com/comdirect/hadoop-logfile-inputformat/documentation/img/LogfileInputFormat_Data.png)
 
+### Code 
+
+The following snippet of code demonstrates the usage of the input format. For further exploration, please read the well documented source of Test and Sample (see following sections).
+
+```
+// create Hadoop configuration (if not received from caller or the like...)
+final Configuration hadoopConfig = new Configuration(true);
+
+// However you receive these in your environment ...
+final SparkConf sparkConfig = ...
+final JavaSparkContext sparkContext = ....
+
+// Java regex pattern
+final Pattern pattern = ...
+
+// This static helper method puts the given pattern into the context
+// for the input format to access it.
+// If you like to use different patterns for different HDFS paths, please
+// see the overloaded version of setPattern() in the source code.
+LogfileInputFormat.setPattern(hadoopConfig, pattern);
+
+// Create pair RDD using the input format
+// params:
+// 1) Path(s) as String
+// 2) class of input format
+// 3) class of key (provided as constant, the value is a really weird expression, have a look ;-)
+// 4) class of value (build-in Hadoop class)
+// 5) Hadoop config (see above)
+JavaPairRDD<Tuple2<Path, Long>, Text> rdd = sparkContext.newAPIHadoopFile(
+    inputPath.toString(),
+    LogfileInputFormat.class,
+    LogfileInputFormat.KEY_CLASS,
+    Text.class,
+    hadoopConfig);
+
+// The RDD can now be processed further as usual in Spark...
+```
+
+## Sample program
